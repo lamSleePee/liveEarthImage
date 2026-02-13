@@ -4,15 +4,15 @@ A real-time satellite imagery viewer that displays live Earth images from multip
 
 ## Features
 
-- 🌍 **Live Satellite Imagery**: Automatically uses the most recent available satellite images (updated every 10 minutes)
-- 🛰️ **Multiple Satellite Sources**:
+- **Live Satellite Imagery**: Automatically uses the most recent available satellite images (updated every 10 minutes)
+- **Multiple Satellite Sources**:
   - Himawari (16×16 grid)
   - GK2A CIRA Geodebra (16×16 grid)
   - GK2A Geocolor (16×16 grid)
   - Meteosat-9 (8×8 grid)
-- 📥 **Download Stitched Images**: Combine all tiles into a single high-resolution image
-- 🎨 **Dark Theme**: Beautiful black background optimized for viewing space imagery
-- ⚡ **Real-time Updates**: Refresh button to get the latest available images
+- **Download Stitched Images**: Combine all tiles into a single high-resolution image
+- **Dark Theme**: Beautiful black background optimized for viewing space imagery
+- **Real-time Updates**: Refresh button to get the latest available images
 
 ## How It Works
 
@@ -21,7 +21,7 @@ The viewer loads satellite imagery tiles from the CIRA Slider service. Images ar
 ## Usage
 
 1. Select a satellite source from the top navigation
-2. Click "🔄 Refresh Time" to update to the latest available time
+2. Click "Refresh Time" to update to the latest available time
 3. Click "Load All Tiles" to load all image tiles
 4. Once loaded, click "Stitch & Download" to combine tiles and download the full image
 
