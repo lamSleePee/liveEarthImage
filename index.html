@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Earth Image Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #111;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border: 1px solid #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .view-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .view-btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            background: #222;
+            color: #fff;
+        }
+
+        .view-btn:hover {
+            background: #333;
+            border-color: #555;
+            transform: translateY(-2px);
+        }
+
+        .view-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.5;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .btn-success:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.5;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            color: #fff;
+            min-height: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #222;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            display: none;
+            border: 1px solid #333;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .grid-container {
+            display: grid;
+            gap: 2px;
+            background: #000;
+            padding: 2px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            max-height: 800px;
+            overflow: auto;
+            align-items: start;
+            border: 1px solid #333;
+        }
+
+        .tile {
+            background: #1a1a1a;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tile img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .tile.loading {
+            background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .tile.error {
+            background: #2a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ff6b6b;
+            font-size: 12px;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .canvas-container {
+            display: none;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .canvas-container h2 {
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        #stitchedCanvas {
+            max-width: 100%;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌍 Live Earth Image Viewer</h1>
+        <p class="subtitle">Satellite Imagery Tile Viewer</p>
+        
+        <div class="view-selector">
+            <button class="view-btn active" data-view="himawari">Himawari (16×16)</button>
+            <button class="view-btn" data-view="gk2a-cira">GK2A CIRA (16×16)</button>
+            <button class="view-btn" data-view="gk2a-geocolor">GK2A Geocolor (16×16)</button>
+            <button class="view-btn" data-view="meteosat-0315">Meteosat-9 (8×8) 03:15</button>
+            <button class="view-btn" data-view="meteosat-0200">Meteosat-9 (8×8) 02:00</button>
+        </div>
+
+        <div class="controls">
+            <button class="btn-primary" id="refreshBtn">🔄 Refresh Time</button>
+            <button class="btn-primary" id="loadBtn">Load All Tiles</button>
+            <button class="btn-success" id="stitchBtn" disabled>Stitch & Download</button>
+        </div>
+
+        <div class="status" id="status">Ready to load tiles</div>
+        
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+
+        <div class="grid-container" id="gridContainer"></div>
+
+        <div class="canvas-container" id="canvasContainer">
+            <h2>Stitched Image</h2>
+            <canvas id="stitchedCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Function to get current UTC time rounded down to nearest 10 minutes
+        function getCurrentImageTime() {
+            const now = new Date();
+            const utcYear = now.getUTCFullYear();
+            const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
+            const utcDay = String(now.getUTCDate()).padStart(2, '0');
+            const utcHour = now.getUTCHours();
+            const utcMinute = now.getUTCMinutes();
+            
+            // Round down to nearest 10-minute interval
+            const roundedMinute = Math.floor(utcMinute / 10) * 10;
+            const minuteStr = String(roundedMinute).padStart(2, '0');
+            
+            return {
+                datePath: `${utcYear}/${utcMonth}/${utcDay}`,
+                timestamp: `${utcYear}${utcMonth}${utcDay}${String(utcHour).padStart(2, '0')}${minuteStr}00`
+            };
+        }
+
+        // Function to generate base URL for a view
+        function generateBaseUrl(viewKey) {
+            const { datePath, timestamp } = getCurrentImageTime();
+            const base = 'https://slider.cira.colostate.edu/data/imagery';
+            
+            const viewConfigs = {
+                himawari: {
+                    path: `${base}/${datePath}/himawari---full_disk/geocolor/${timestamp}/04`,
+                    name: 'Himawari Satellite Imagery'
+                },
+                'gk2a-cira': {
+                    path: `${base}/${datePath}/gk2a---full_disk/cira_geodebra/${timestamp}/04`,
+                    name: 'GK2A CIRA Geodebra Satellite Imagery'
+                },
+                'gk2a-geocolor': {
+                    path: `${base}/${datePath}/gk2a---full_disk/geocolor/${timestamp}/04`,
+                    name: 'GK2A Geocolor Satellite Imagery'
+                },
+                'meteosat-0315': {
+                    path: `${base}/${datePath}/meteosat-9---full_disk/geocolor/${timestamp}/03`,
+                    name: 'Meteosat-9 Satellite Imagery'
+                },
+                'meteosat-0200': {
+                    path: `${base}/${datePath}/meteosat-9---full_disk/geocolor/${timestamp}/03`,
+                    name: 'Meteosat-9 Satellite Imagery'
+                }
+            };
+            
+            return viewConfigs[viewKey];
+        }
+
+        const VIEWS = {
+            himawari: {
+                gridSize: 16,
+                name: 'Himawari Satellite Imagery'
+            },
+            'gk2a-cira': {
+                gridSize: 16,
+                name: 'GK2A CIRA Geodebra Satellite Imagery'
+            },
+            'gk2a-geocolor': {
+                gridSize: 16,
+                name: 'GK2A Geocolor Satellite Imagery'
+            },
+            'meteosat-0315': {
+                gridSize: 8,
+                name: 'Meteosat-9 Satellite Imagery'
+            },
+            'meteosat-0200': {
+                gridSize: 8,
+                name: 'Meteosat-9 Satellite Imagery'
+            }
+        };
+
+        let currentView = 'himawari';
+        let tiles = [];
+        let loadedCount = 0;
+        let totalTiles = 0;
+        let tileUrls = [];
+
+        const gridContainer = document.getElementById('gridContainer');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const loadBtn = document.getElementById('loadBtn');
+        const stitchBtn = document.getElementById('stitchBtn');
+        const status = document.getElementById('status');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const stitchedCanvas = document.getElementById('stitchedCanvas');
+        const viewButtons = document.querySelectorAll('.view-btn');
+
+        // Initialize view
+        function initView(viewKey) {
+            currentView = viewKey;
+            const view = VIEWS[viewKey];
+            const urlConfig = generateBaseUrl(viewKey);
+            
+            // Update subtitle with current time
+            const { timestamp } = getCurrentImageTime();
+            const timeStr = `${timestamp.substring(8, 10)}:${timestamp.substring(10, 12)} UTC`;
+            document.querySelector('.subtitle').textContent = `${view.name} - ${view.gridSize}×${view.gridSize} Grid (${timeStr})`;
+            
+            // Update grid columns
+            gridContainer.style.gridTemplateColumns = `repeat(${view.gridSize}, 1fr)`;
+            
+            // Generate tile URLs with dynamic base URL
+            tileUrls = [];
+            for (let row = 0; row < view.gridSize; row++) {
+                for (let col = 0; col < view.gridSize; col++) {
+                    const rowStr = String(row).padStart(3, '0');
+                    const colStr = String(col).padStart(3, '0');
+                    tileUrls.push({
+                        url: `${urlConfig.path}/${rowStr}_${colStr}.png`,
+                        row: row,
+                        col: col
+                    });
+                }
+            }
+            
+            totalTiles = view.gridSize * view.gridSize;
+            
+            // Reset state
+            tiles = [];
+            loadedCount = 0;
+            loadBtn.disabled = false;
+            stitchBtn.disabled = true;
+            status.textContent = 'Ready to load tiles';
+            progressBar.style.display = 'none';
+            canvasContainer.style.display = 'none';
+            
+            // Create grid
+            createGrid();
+        }
+
+        // Create grid
+        function createGrid() {
+            gridContainer.innerHTML = '';
+            const gridSize = VIEWS[currentView].gridSize;
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile loading';
+                    tile.id = `tile-${row}-${col}`;
+                    gridContainer.appendChild(tile);
+                }
+            }
+        }
+
+        // Load a single tile
+        function loadTile(index) {
+            return new Promise((resolve, reject) => {
+                const tileData = tileUrls[index];
+                const img = new Image();
+                
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const row = tileData.row;
+                    const col = tileData.col;
+                    const tileElement = document.getElementById(`tile-${row}-${col}`);
+                    tileElement.classList.remove('loading');
+                    tileElement.innerHTML = `<img src="${tileData.url}" alt="Tile ${row}-${col}" crossorigin="anonymous">`;
+                    
+                    tiles[index] = {
+                        img: img,
+                        row: row,
+                        col: col,
+                        url: tileData.url
+                    };
+                    
+                    loadedCount++;
+                    updateProgress();
+                    resolve(img);
+                };
+                
+                img.onerror = () => {
+                    if (img.crossOrigin === 'anonymous') {
+                        const retryImg = new Image();
+                        retryImg.onload = () => {
+                            const row = tileData.row;
+                            const col = tileData.col;
+                            const tileElement = document.getElementById(`tile-${row}-${col}`);
+                            tileElement.classList.remove('loading');
+                            tileElement.innerHTML = `<img src="${tileData.url}" alt="Tile ${row}-${col}">`;
+                            
+                            tiles[index] = {
+                                img: retryImg,
+                                row: row,
+                                col: col,
+                                url: tileData.url,
+                                noCors: true
+                            };
+                            
+                            loadedCount++;
+                            updateProgress();
+                            resolve(retryImg);
+                        };
+                        retryImg.onerror = () => {
+                            const row = tileData.row;
+                            const col = tileData.col;
+                            const tileElement = document.getElementById(`tile-${row}-${col}`);
+                            tileElement.classList.remove('loading');
+                            tileElement.classList.add('error');
+                            tileElement.textContent = 'Error';
+                            
+                            loadedCount++;
+                            updateProgress();
+                            reject(new Error(`Failed to load tile ${row}-${col}`));
+                        };
+                        retryImg.src = tileData.url;
+                    } else {
+                        const row = tileData.row;
+                        const col = tileData.col;
+                        const tileElement = document.getElementById(`tile-${row}-${col}`);
+                        tileElement.classList.remove('loading');
+                        tileElement.classList.add('error');
+                        tileElement.textContent = 'Error';
+                        
+                        loadedCount++;
+                        updateProgress();
+                        reject(new Error(`Failed to load tile ${row}-${col}`));
+                    }
+                };
+                
+                img.src = tileData.url;
+            });
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            const percent = Math.round((loadedCount / totalTiles) * 100);
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = `${percent}% (${loadedCount}/${totalTiles})`;
+            status.textContent = `Loading tiles: ${loadedCount}/${totalTiles} (${percent}%)`;
+            
+            if (loadedCount === totalTiles) {
+                status.textContent = `All tiles loaded! Ready to stitch.`;
+                stitchBtn.disabled = false;
+                progressBar.style.display = 'none';
+            }
+        }
+
+        // Load all tiles
+        async function loadAllTiles() {
+            loadBtn.disabled = true;
+            stitchBtn.disabled = true;
+            loadedCount = 0;
+            tiles.length = 0;
+            progressBar.style.display = 'block';
+            status.textContent = 'Loading tiles...';
+            
+            createGrid();
+            
+            const promises = [];
+            for (let i = 0; i < tileUrls.length; i++) {
+                promises.push(loadTile(i).catch(err => {
+                    const tileData = tileUrls[i];
+                    console.error(`Error loading tile ${tileData.row}-${tileData.col}:`, err);
+                }));
+            }
+            
+            await Promise.all(promises);
+        }
+
+        // Stitch all tiles together
+        async function stitchTiles() {
+            status.textContent = 'Stitching tiles together...';
+            stitchBtn.disabled = true;
+            
+            let tileWidth = 0;
+            let tileHeight = 0;
+            
+            for (let i = 0; i < tiles.length; i++) {
+                if (tiles[i] && tiles[i].img && tiles[i].img.complete) {
+                    tileWidth = tiles[i].img.naturalWidth || tiles[i].img.width;
+                    tileHeight = tiles[i].img.naturalHeight || tiles[i].img.height;
+                    if (tileWidth > 0 && tileHeight > 0) break;
+                }
+            }
+            
+            if (tileWidth === 0 || tileHeight === 0) {
+                status.textContent = 'Error: Could not determine tile dimensions. Trying to fetch first tile...';
+                const firstTile = tileUrls[0];
+                const testImg = new Image();
+                testImg.onload = () => {
+                    tileWidth = testImg.naturalWidth || testImg.width;
+                    tileHeight = testImg.naturalHeight || testImg.height;
+                    if (tileWidth > 0 && tileHeight > 0) {
+                        performStitching(tileWidth, tileHeight);
+                    } else {
+                        status.textContent = 'Error: Could not determine tile dimensions';
+                        stitchBtn.disabled = false;
+                    }
+                };
+                testImg.onerror = () => {
+                    status.textContent = 'Error: Could not load tile to determine dimensions';
+                    stitchBtn.disabled = false;
+                };
+                testImg.crossOrigin = 'anonymous';
+                testImg.src = firstTile.url;
+                return;
+            }
+            
+            performStitching(tileWidth, tileHeight);
+        }
+
+        function performStitching(tileWidth, tileHeight) {
+            const gridSize = VIEWS[currentView].gridSize;
+            const canvasWidth = tileWidth * gridSize;
+            const canvasHeight = tileHeight * gridSize;
+            
+            stitchedCanvas.width = canvasWidth;
+            stitchedCanvas.height = canvasHeight;
+            
+            const ctx = stitchedCanvas.getContext('2d');
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            
+            let drawnCount = 0;
+            let errorCount = 0;
+            
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    const index = row * gridSize + col;
+                    const tile = tiles[index];
+                    
+                    if (tile && tile.img && tile.img.complete) {
+                        try {
+                            const x = col * tileWidth;
+                            const y = row * tileHeight;
+                            ctx.drawImage(tile.img, x, y, tileWidth, tileHeight);
+                            drawnCount++;
+                        } catch (e) {
+                            console.error(`Error drawing tile ${row}-${col}:`, e);
+                            errorCount++;
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(col * tileWidth, row * tileHeight, tileWidth, tileHeight);
+                            ctx.fillStyle = '#fff';
+                            ctx.font = '16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('X', col * tileWidth + tileWidth/2, row * tileHeight + tileHeight/2);
+                        }
+                    }
+                }
+            }
+            
+            canvasContainer.style.display = 'block';
+            if (errorCount > 0) {
+                status.textContent = `Stitching complete! ${drawnCount} tiles stitched, ${errorCount} errors (CORS issue). Image size: ${canvasWidth}×${canvasHeight}px`;
+            } else {
+                status.textContent = `Stitching complete! ${drawnCount} tiles stitched. Image size: ${canvasWidth}×${canvasHeight}px`;
+            }
+            stitchBtn.disabled = false;
+        }
+
+        // Download stitched image
+        function downloadImage() {
+            if (!stitchedCanvas.width || !stitchedCanvas.height) {
+                alert('Please stitch the tiles first!');
+                return;
+            }
+            
+            stitchedCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const viewName = currentView.replace(/-/g, '_');
+                a.download = `${viewName}-full-disk-${new Date().toISOString().split('T')[0]}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                status.textContent = 'Image downloaded successfully!';
+            }, 'image/png');
+        }
+
+        // Event listeners
+        viewButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                viewButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                initView(btn.dataset.view);
+            });
+        });
+
+        refreshBtn.addEventListener('click', () => {
+            initView(currentView);
+            status.textContent = 'Time refreshed. Ready to load tiles.';
+        });
+
+        loadBtn.addEventListener('click', loadAllTiles);
+        stitchBtn.addEventListener('click', async () => {
+            await stitchTiles();
+            setTimeout(downloadImage, 500);
+        });
+
+        // Initialize
+        initView('himawari');
+    </script>
+</body>
+</html>

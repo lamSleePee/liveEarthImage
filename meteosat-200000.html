@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteosat-9 Image Tile Viewer (02:00)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            color: #333;
+            min-height: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #333;
+            padding: 2px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            max-height: 800px;
+            overflow: auto;
+            align-items: start;
+        }
+
+        .tile {
+            background: #f0f0f0;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tile img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .tile.loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .tile.error {
+            background: #ffebee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #c62828;
+            font-size: 12px;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .canvas-container {
+            display: none;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        #stitchedCanvas {
+            max-width: 100%;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin: 10px 5px 0 5px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Meteosat-9 Image Tile Viewer</h1>
+        <p class="subtitle">Meteosat-9 Satellite Imagery - 8×8 Grid (02:00 UTC)</p>
+        
+        <div class="controls">
+            <button class="btn-primary" id="loadBtn">Load All Tiles</button>
+            <button class="btn-success" id="stitchBtn" disabled>Stitch & Download</button>
+        </div>
+
+        <div class="status" id="status">Ready to load tiles</div>
+        
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+
+        <div class="grid-container" id="gridContainer"></div>
+
+        <div class="canvas-container" id="canvasContainer">
+            <h2>Stitched Image</h2>
+            <canvas id="stitchedCanvas"></canvas>
+        </div>
+
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">← Himawari (16×16)</a>
+            <a href="gk2a.html" class="nav-link">GK2A CIRA (03:10)</a>
+            <a href="gk2a-geocolor.html" class="nav-link">GK2A Geocolor (04:40)</a>
+            <a href="meteosat.html" class="nav-link">Meteosat-9 (03:15) →</a>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'https://slider.cira.colostate.edu/data/imagery/2026/01/29/meteosat-9---full_disk/geocolor/20260129020000/03';
+        const GRID_SIZE = 8; // 000 to 007 = 8 tiles
+        const tiles = [];
+        let loadedCount = 0;
+        let totalTiles = GRID_SIZE * GRID_SIZE;
+
+        // Hardcoded URLs for all 64 tiles (8x8 grid from 000_000 to 007_007)
+        const TILE_URLS = [];
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const rowStr = String(row).padStart(3, '0');
+                const colStr = String(col).padStart(3, '0');
+                TILE_URLS.push({
+                    url: `${BASE_URL}/${rowStr}_${colStr}.png`,
+                    row: row,
+                    col: col
+                });
+            }
+        }
+
+        const gridContainer = document.getElementById('gridContainer');
+        const loadBtn = document.getElementById('loadBtn');
+        const stitchBtn = document.getElementById('stitchBtn');
+        const status = document.getElementById('status');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const stitchedCanvas = document.getElementById('stitchedCanvas');
+
+        // Create grid
+        function createGrid() {
+            gridContainer.innerHTML = '';
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile loading';
+                    tile.id = `tile-${row}-${col}`;
+                    gridContainer.appendChild(tile);
+                }
+            }
+        }
+
+        // Load a single tile using hardcoded URL
+        function loadTile(index) {
+            return new Promise((resolve, reject) => {
+                const tileData = TILE_URLS[index];
+                const img = new Image();
+                
+                // Try to set crossOrigin for canvas compatibility, but allow fallback
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const row = tileData.row;
+                    const col = tileData.col;
+                    const tileElement = document.getElementById(`tile-${row}-${col}`);
+                    tileElement.classList.remove('loading');
+                    tileElement.innerHTML = `<img src="${tileData.url}" alt="Tile ${row}-${col}" crossorigin="anonymous">`;
+                    
+                    tiles[index] = {
+                        img: img,
+                        row: row,
+                        col: col,
+                        url: tileData.url
+                    };
+                    
+                    loadedCount++;
+                    updateProgress();
+                    resolve(img);
+                };
+                
+                img.onerror = () => {
+                    // Retry without crossOrigin if CORS fails
+                    if (img.crossOrigin === 'anonymous') {
+                        const retryImg = new Image();
+                        retryImg.onload = () => {
+                            const row = tileData.row;
+                            const col = tileData.col;
+                            const tileElement = document.getElementById(`tile-${row}-${col}`);
+                            tileElement.classList.remove('loading');
+                            tileElement.innerHTML = `<img src="${tileData.url}" alt="Tile ${row}-${col}">`;
+                            
+                            tiles[index] = {
+                                img: retryImg,
+                                row: row,
+                                col: col,
+                                url: tileData.url,
+                                noCors: true
+                            };
+                            
+                            loadedCount++;
+                            updateProgress();
+                            resolve(retryImg);
+                        };
+                        retryImg.onerror = () => {
+                            const row = tileData.row;
+                            const col = tileData.col;
+                            const tileElement = document.getElementById(`tile-${row}-${col}`);
+                            tileElement.classList.remove('loading');
+                            tileElement.classList.add('error');
+                            tileElement.textContent = 'Error';
+                            
+                            loadedCount++;
+                            updateProgress();
+                            reject(new Error(`Failed to load tile ${row}-${col}`));
+                        };
+                        retryImg.src = tileData.url;
+                    } else {
+                        const row = tileData.row;
+                        const col = tileData.col;
+                        const tileElement = document.getElementById(`tile-${row}-${col}`);
+                        tileElement.classList.remove('loading');
+                        tileElement.classList.add('error');
+                        tileElement.textContent = 'Error';
+                        
+                        loadedCount++;
+                        updateProgress();
+                        reject(new Error(`Failed to load tile ${row}-${col}`));
+                    }
+                };
+                
+                img.src = tileData.url;
+            });
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            const percent = Math.round((loadedCount / totalTiles) * 100);
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = `${percent}% (${loadedCount}/${totalTiles})`;
+            status.textContent = `Loading tiles: ${loadedCount}/${totalTiles} (${percent}%)`;
+            
+            if (loadedCount === totalTiles) {
+                status.textContent = `All tiles loaded! Ready to stitch.`;
+                stitchBtn.disabled = false;
+                progressBar.style.display = 'none';
+            }
+        }
+
+        // Load all tiles using hardcoded URLs
+        async function loadAllTiles() {
+            loadBtn.disabled = true;
+            stitchBtn.disabled = true;
+            loadedCount = 0;
+            tiles.length = 0;
+            progressBar.style.display = 'block';
+            status.textContent = 'Loading tiles...';
+            
+            createGrid();
+            
+            const promises = [];
+            for (let i = 0; i < TILE_URLS.length; i++) {
+                promises.push(loadTile(i).catch(err => {
+                    const tileData = TILE_URLS[i];
+                    console.error(`Error loading tile ${tileData.row}-${tileData.col}:`, err);
+                }));
+            }
+            
+            await Promise.all(promises);
+        }
+
+        // Stitch all tiles together
+        async function stitchTiles() {
+            status.textContent = 'Stitching tiles together...';
+            stitchBtn.disabled = true;
+            
+            // Get dimensions of first loaded tile
+            let tileWidth = 0;
+            let tileHeight = 0;
+            
+            for (let i = 0; i < tiles.length; i++) {
+                if (tiles[i] && tiles[i].img && tiles[i].img.complete) {
+                    tileWidth = tiles[i].img.naturalWidth || tiles[i].img.width;
+                    tileHeight = tiles[i].img.naturalHeight || tiles[i].img.height;
+                    if (tileWidth > 0 && tileHeight > 0) break;
+                }
+            }
+            
+            if (tileWidth === 0 || tileHeight === 0) {
+                status.textContent = 'Error: Could not determine tile dimensions. Trying to fetch first tile...';
+                // Try to get dimensions from the first tile URL
+                const firstTile = TILE_URLS[0];
+                const testImg = new Image();
+                testImg.onload = () => {
+                    tileWidth = testImg.naturalWidth || testImg.width;
+                    tileHeight = testImg.naturalHeight || testImg.height;
+                    if (tileWidth > 0 && tileHeight > 0) {
+                        performStitching(tileWidth, tileHeight);
+                    } else {
+                        status.textContent = 'Error: Could not determine tile dimensions';
+                        stitchBtn.disabled = false;
+                    }
+                };
+                testImg.onerror = () => {
+                    status.textContent = 'Error: Could not load tile to determine dimensions';
+                    stitchBtn.disabled = false;
+                };
+                testImg.crossOrigin = 'anonymous';
+                testImg.src = firstTile.url;
+                return;
+            }
+            
+            performStitching(tileWidth, tileHeight);
+        }
+
+        function performStitching(tileWidth, tileHeight) {
+            const canvasWidth = tileWidth * GRID_SIZE;
+            const canvasHeight = tileHeight * GRID_SIZE;
+            
+            stitchedCanvas.width = canvasWidth;
+            stitchedCanvas.height = canvasHeight;
+            
+            const ctx = stitchedCanvas.getContext('2d');
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            
+            let drawnCount = 0;
+            let errorCount = 0;
+            
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const index = row * GRID_SIZE + col;
+                    const tile = tiles[index];
+                    
+                    if (tile && tile.img && tile.img.complete) {
+                        try {
+                            const x = col * tileWidth;
+                            const y = row * tileHeight;
+                            ctx.drawImage(tile.img, x, y, tileWidth, tileHeight);
+                            drawnCount++;
+                        } catch (e) {
+                            console.error(`Error drawing tile ${row}-${col}:`, e);
+                            errorCount++;
+                            // Draw a placeholder
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(col * tileWidth, row * tileHeight, tileWidth, tileHeight);
+                            ctx.fillStyle = '#fff';
+                            ctx.font = '16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('X', col * tileWidth + tileWidth/2, row * tileHeight + tileHeight/2);
+                        }
+                    }
+                }
+            }
+            
+            canvasContainer.style.display = 'block';
+            if (errorCount > 0) {
+                status.textContent = `Stitching complete! ${drawnCount} tiles stitched, ${errorCount} errors (CORS issue). Image size: ${canvasWidth}×${canvasHeight}px`;
+            } else {
+                status.textContent = `Stitching complete! ${drawnCount} tiles stitched. Image size: ${canvasWidth}×${canvasHeight}px`;
+            }
+            stitchBtn.disabled = false;
+        }
+
+        // Download stitched image
+        function downloadImage() {
+            if (!stitchedCanvas.width || !stitchedCanvas.height) {
+                alert('Please stitch the tiles first!');
+                return;
+            }
+            
+            stitchedCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `meteosat-9-full-disk-200000-${new Date().toISOString().split('T')[0]}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                status.textContent = 'Image downloaded successfully!';
+            }, 'image/png');
+        }
+
+        // Event listeners
+        loadBtn.addEventListener('click', loadAllTiles);
+        stitchBtn.addEventListener('click', async () => {
+            await stitchTiles();
+            setTimeout(downloadImage, 500);
+        });
+
+        // Initialize grid
+        createGrid();
+    </script>
+</body>
+</html>
