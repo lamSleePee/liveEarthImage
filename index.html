@@ -268,14 +268,17 @@
     </div>
 
     <script>
-        // Function to get current UTC time rounded down to nearest 10 minutes
-        function getCurrentImageTime() {
+        // Function to get UTC time rounded down to nearest 10 minutes, with optional offset
+        function getCurrentImageTime(offsetMinutes = 0) {
             const now = new Date();
-            const utcYear = now.getUTCFullYear();
-            const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
-            const utcDay = String(now.getUTCDate()).padStart(2, '0');
-            const utcHour = now.getUTCHours();
-            const utcMinute = now.getUTCMinutes();
+            // Apply offset (negative to go back in time)
+            const adjustedTime = new Date(now.getTime() - offsetMinutes * 60 * 1000);
+            
+            const utcYear = adjustedTime.getUTCFullYear();
+            const utcMonth = String(adjustedTime.getUTCMonth() + 1).padStart(2, '0');
+            const utcDay = String(adjustedTime.getUTCDate()).padStart(2, '0');
+            const utcHour = adjustedTime.getUTCHours();
+            const utcMinute = adjustedTime.getUTCMinutes();
             
             // Round down to nearest 10-minute interval
             const roundedMinute = Math.floor(utcMinute / 10) * 10;
@@ -287,9 +290,9 @@
             };
         }
 
-        // Function to generate base URL for a view
-        function generateBaseUrl(viewKey) {
-            const { datePath, timestamp } = getCurrentImageTime();
+        // Function to generate base URL for a view with optional time offset
+        function generateBaseUrl(viewKey, offsetMinutes = 0) {
+            const { datePath, timestamp } = getCurrentImageTime(offsetMinutes);
             const base = 'https://slider.cira.colostate.edu/data/imagery';
             
             const viewConfigs = {
@@ -316,6 +319,52 @@
             };
             
             return viewConfigs[viewKey];
+        }
+        
+        // Test if a URL exists by trying to load a sample tile
+        async function testUrlExists(basePath, gridSize) {
+            return new Promise((resolve) => {
+                // Try the first tile (000_000.png)
+                const testUrl = `${basePath}/000_000.png`;
+                const img = new Image();
+                let resolved = false;
+                
+                img.onload = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(true);
+                    }
+                };
+                
+                img.onerror = () => {
+                    // Try without CORS
+                    const retryImg = new Image();
+                    retryImg.onload = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(true);
+                        }
+                    };
+                    retryImg.onerror = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(false);
+                        }
+                    };
+                    retryImg.src = testUrl;
+                };
+                
+                img.crossOrigin = 'anonymous';
+                img.src = testUrl;
+                
+                // Timeout after 5 seconds
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(false);
+                    }
+                }, 5000);
+            });
         }
 
         const VIEWS = {
@@ -359,15 +408,37 @@
         const viewButtons = document.querySelectorAll('.view-btn');
 
         // Initialize view
-        function initView(viewKey) {
+        async function initView(viewKey) {
             currentView = viewKey;
             const view = VIEWS[viewKey];
-            const urlConfig = generateBaseUrl(viewKey);
             
-            // Update subtitle with current time
-            const { timestamp } = getCurrentImageTime();
+            // Try to find a valid timestamp by testing URLs with different time offsets
+            status.textContent = 'Finding available imagery...';
+            let urlConfig = null;
+            let workingOffset = 0;
+            const offsets = [0, 10, 20, 30, 40, 50, 60]; // Try current time, then go back 10, 20, 30... minutes
+            
+            for (const offset of offsets) {
+                const testConfig = generateBaseUrl(viewKey, offset);
+                const exists = await testUrlExists(testConfig.path, view.gridSize);
+                if (exists) {
+                    urlConfig = testConfig;
+                    workingOffset = offset;
+                    break;
+                }
+            }
+            
+            if (!urlConfig) {
+                // Fallback to current time even if test failed
+                urlConfig = generateBaseUrl(viewKey, 0);
+                status.textContent = 'Warning: Could not verify imagery availability. Using current time.';
+            }
+            
+            // Update subtitle with working time
+            const { timestamp } = getCurrentImageTime(workingOffset);
             const timeStr = `${timestamp.substring(8, 10)}:${timestamp.substring(10, 12)} UTC`;
-            document.querySelector('.subtitle').textContent = `${view.name} - ${view.gridSize}×${view.gridSize} Grid (${timeStr})`;
+            const offsetText = workingOffset > 0 ? ` (${workingOffset} min ago)` : '';
+            document.querySelector('.subtitle').textContent = `${view.name} - ${view.gridSize}×${view.gridSize} Grid (${timeStr}${offsetText})`;
             
             // Update grid columns
             gridContainer.style.gridTemplateColumns = `repeat(${view.gridSize}, 1fr)`;
@@ -472,9 +543,12 @@
                             tileElement.classList.add('error');
                             tileElement.textContent = 'Error';
                             
+                            // Log the failed URL for debugging
+                            console.error(`Failed to load tile ${row}-${col} from: ${tileData.url}`);
+                            
                             loadedCount++;
                             updateProgress();
-                            reject(new Error(`Failed to load tile ${row}-${col}`));
+                            reject(new Error(`Failed to load tile ${row}-${col} from ${tileData.url}`));
                         };
                         retryImg.src = tileData.url;
                     } else {
@@ -485,9 +559,12 @@
                         tileElement.classList.add('error');
                         tileElement.textContent = 'Error';
                         
+                        // Log the failed URL for debugging
+                        console.error(`Failed to load tile ${row}-${col} from: ${tileData.url}`);
+                        
                         loadedCount++;
                         updateProgress();
-                        reject(new Error(`Failed to load tile ${row}-${col}`));
+                        reject(new Error(`Failed to load tile ${row}-${col} from ${tileData.url}`));
                     }
                 };
                 
@@ -644,19 +721,18 @@
             }, 'image/png');
         }
 
-        // Event listeners
-        viewButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                viewButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                initView(btn.dataset.view);
-            });
-        });
+                // Event listeners
+                viewButtons.forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        viewButtons.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        await initView(btn.dataset.view);
+                    });
+                });
 
-        refreshBtn.addEventListener('click', () => {
-            initView(currentView);
-            status.textContent = 'Time refreshed. Ready to load tiles.';
-        });
+                refreshBtn.addEventListener('click', async () => {
+                    await initView(currentView);
+                });
 
         loadBtn.addEventListener('click', loadAllTiles);
         stitchBtn.addEventListener('click', async () => {
@@ -665,7 +741,9 @@
         });
 
         // Initialize
-        initView('himawari');
+        (async () => {
+            await initView('himawari');
+        })();
     </script>
 </body>
 </html>
